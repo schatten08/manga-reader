@@ -19,7 +19,8 @@ def save_progress():
         json.dump({
             "volume": st.session_state.current_volume, 
             "chunk": st.session_state.current_chunk,
-            "zoom": st.session_state.get("zoom_width", 700)
+            "zoom": st.session_state.get("zoom_width", 700),
+            "saved_page": st.session_state.get("saved_page")
         }, f)
 
 # --- Кэширование функции рендера для ускорения интерфейса ---
@@ -55,8 +56,11 @@ else:
 
     if 'current_volume' not in st.session_state:
         st.session_state.current_volume = saved_data.get("volume", pdf_files[0] if pdf_files else None)
+        st.session_state.do_bookmark_scroll = True # Флаг для скролла при первом заходе
     if 'current_chunk' not in st.session_state:
         st.session_state.current_chunk = saved_data.get("chunk", 1)
+    if 'saved_page' not in st.session_state:
+        st.session_state.saved_page = saved_data.get("saved_page")
 
     # Защита от случая, если сохраненный том был удален
     if st.session_state.current_volume not in pdf_files and pdf_files:
@@ -77,6 +81,7 @@ else:
     if st.session_state.current_volume != selected_pdf:
         st.session_state.current_volume = selected_pdf
         st.session_state.current_chunk = 1
+        st.session_state.saved_page = None
         st.session_state.scroll_to_top = True
         save_progress()
 
@@ -111,7 +116,12 @@ else:
     # Вспомогательные функции для переключения по кнопкам
     def update_and_save(new_chunk):
         st.session_state.current_chunk = new_chunk
+        st.session_state.saved_page = None # Сбрасываем закладку при ручном перелистывании
         st.session_state.scroll_to_top = True
+        save_progress()
+
+    def set_bookmark(page_idx):
+        st.session_state.saved_page = page_idx
         save_progress()
 
     def go_first():
@@ -140,6 +150,21 @@ else:
         import streamlit.components.v1 as components
         components.html(js, height=0)
         st.session_state.scroll_to_top = False
+    elif st.session_state.get("do_bookmark_scroll", False) and st.session_state.get("saved_page") is not None:
+        p = st.session_state.saved_page
+        js = f'''
+        <script>
+            setTimeout(function() {{
+                var target = window.parent.document.getElementById("manga_page_{p}");
+                if (target) {{
+                    target.scrollIntoView({{behavior: "smooth", block: "start"}});
+                }}
+            }}, 800);
+        </script>
+        '''
+        import streamlit.components.v1 as components
+        components.html(js, height=0)
+        st.session_state.do_bookmark_scroll = False
 
     # --- ВЕРХНИЙ БЛОК НАВИГАЦИИ (До страниц) ---
     st.markdown("---")
@@ -169,9 +194,29 @@ else:
 
     # Рендерим загруженные 20 страниц
     for page_num in range(start_page, end_page):
+        # Якорь для скролла
+        st.markdown(f'<div id="manga_page_{page_num}"></div>', unsafe_allow_html=True)
+        
         # Достаем картинку из нашего кэша
         img_bytes = get_pdf_page_image(pdf_path, page_num)
         st.image(img_bytes, use_container_width=True)
+        
+        # Кнопка для сохранения точной позиции (закладка)
+        cf1, cf2, cf3 = st.columns([1, 1.5, 1])
+        with cf2:
+            is_saved = (st.session_state.get("saved_page") == page_num)
+            btn_text = f"✅ Вы остановились здесь (Стр. {page_num + 1})" if is_saved else f"📍 Запомнить это место (Стр. {page_num + 1})"
+            
+            # Используем on_click (Callback), чтобы избежать жесткого rerun и зависаний
+            st.button(
+                btn_text, 
+                key=f"bm_{page_num}", 
+                use_container_width=True, 
+                disabled=is_saved, 
+                on_click=set_bookmark, 
+                args=(page_num,)
+            )
+                
         st.markdown("---")
 
     # --- НИЖНИЙ БЛОК НАВИГАЦИИ (После страниц) ---
