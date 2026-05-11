@@ -50,17 +50,34 @@ else:
     # Вспомогательные функции для переключения по кнопкам
     def go_first():
         st.session_state.current_chunk = 1
+        st.session_state.scroll_to_top = True
 
     def go_prev():
         if st.session_state.current_chunk > 1:
             st.session_state.current_chunk -= 1
+            st.session_state.scroll_to_top = True
 
     def go_next():
         if st.session_state.current_chunk < total_chapters:
             st.session_state.current_chunk += 1
+            st.session_state.scroll_to_top = True
 
     def go_last():
         st.session_state.current_chunk = total_chapters
+        st.session_state.scroll_to_top = True
+
+    # Прокрутка страницы наверх после смены части
+    if st.session_state.get("scroll_to_top", False):
+        js = '''
+        <script>
+            var body = window.parent.document.querySelector(".main");
+            if (body) body.scrollTop = 0;
+            window.parent.scrollTo(0,0);
+        </script>
+        '''
+        import streamlit.components.v1 as components
+        components.html(js, height=0)
+        st.session_state.scroll_to_top = False
 
     # --- ВЕРХНИЙ БЛОК НАВИГАЦИИ (До страниц) ---
     st.markdown("---")
