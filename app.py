@@ -14,9 +14,13 @@ def load_progress():
             return {}
     return {}
 
-def save_progress(volume, chunk):
+def save_progress():
     with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
-        json.dump({"volume": volume, "chunk": chunk}, f)
+        json.dump({
+            "volume": st.session_state.current_volume, 
+            "chunk": st.session_state.current_chunk,
+            "zoom": st.session_state.get("zoom_width", 700)
+        }, f)
 
 # --- Кэширование функции рендера для ускорения интерфейса ---
 @st.cache_data(show_spinner=False)
@@ -74,7 +78,7 @@ else:
         st.session_state.current_volume = selected_pdf
         st.session_state.current_chunk = 1
         st.session_state.scroll_to_top = True
-        save_progress(st.session_state.current_volume, st.session_state.current_chunk)
+        save_progress()
 
     # Используем with для безопасного открытия файла, чтобы узнать количество страниц
     with fitz.open(pdf_path) as doc:
@@ -84,7 +88,20 @@ else:
 
     st.sidebar.markdown("---")
     st.sidebar.header("Настройки")
-    zoom_width = st.sidebar.slider("🔍 Масштаб (ширина)", min_value=300, max_value=2000, value=700, step=100, help="Увеличьте ползунок, чтобы растянуть мангу на весь экран ПК")
+    
+    # Callback для сохранения зума при движении ползунка
+    def on_zoom_change():
+        save_progress()
+
+    saved_zoom = saved_data.get("zoom", 700)
+    zoom_width = st.sidebar.slider(
+        "🔍 Масштаб (ширина)", 
+        min_value=300, max_value=2000, value=saved_zoom, step=100, 
+        key="zoom_width",
+        on_change=on_zoom_change,
+        help="Увеличьте ползунок, чтобы растянуть мангу на весь экран ПК"
+    )
+    
     # Внедряем CSS-стиль для переопределения стандартной узкой ширины Streamlit
     st.markdown(f"<style>.block-container {{ max-width: {zoom_width}px !important; padding-top: 2rem; }}</style>", unsafe_allow_html=True)
 
@@ -95,7 +112,7 @@ else:
     def update_and_save(new_chunk):
         st.session_state.current_chunk = new_chunk
         st.session_state.scroll_to_top = True
-        save_progress(st.session_state.current_volume, st.session_state.current_chunk)
+        save_progress()
 
     def go_first():
         update_and_save(1)
