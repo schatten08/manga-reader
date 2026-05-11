@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manga Reader Web</title>
+    <!-- Подключаем PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #ffffff;
+            --panel-bg: #2d2d2d;
+            --btn-bg: #4b4b4b;
+        }
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #top-bar {
+            background-color: var(--panel-bg);
+            width: 100%;
+            padding: 15px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        select, button {
+            padding: 8px 12px;
+            border-radius: 5px;
+            border: none;
+            background-color: var(--btn-bg);
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:hover { background-color: #666; }
+        
+        #viewer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 800px; /* По умолчанию */
+            margin-top: 20px;
+        }
+        .page-container {
+            margin-bottom: 20px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+        canvas {
+            max-width: 100%;
+            height: auto;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="top-bar">
+        <select id="manga-select">
+            <option value="">Загрузка списка...</option>
+        </select>
+        <button id="prev-btn">⬅️ Назад</button>
+        <span id="page-info" style="align-self: center;">Стр: 0 / 0</span>
+        <button id="next-btn">Вперед ➡️</button>
+        <button id="zoom-in">🔍 +</button>
+        <button id="zoom-out">🔍 -</button>
+    </div>
+
+    <div id="viewer"></div>
+
+    <script>
+        // Инициализация PDF.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+        let currentPdf = null;
+        let currentPage = 1;
+        let pagesPerChunk = 20; // Увеличили количество страниц
+        let currentScale = 1.5;
+
+        const select = document.getElementById('manga-select');
+        const viewer = document.getElementById('viewer');
+        const pageInfo = document.getElementById('page-info');
+
+        // Сохранение прогресса на сервер
+        async function saveProgressToServer(volume, page) {
+            try {
+                await fetch('/api/progress', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ volume: volume, page: page })
+                });
+            } catch (err) {
+                console.error("Ошибка сохранения прогресса:", err);
+            }
+        }
+
+        // Загрузка списка манги с сервера (FastAPI)
+        async function loadMangaList() {
+            const res = await fetch('/api/manga');
+            const data = await res.json();
+            
+            // Получаем прогресс с сервера
+            const progRes = await fetch('/api/progress');
+            const progData = await progRes.json();
+            
+            select.innerHTML = '';
+            if (data.files && data.files.length > 0) {
+                data.files.forEach(file => {
+                    const opt = document.createElement('option');
+                    opt.value = file;
+                    opt.textContent = file.replace('.pdf', '').replace(/_/g, ' ');
+                    select.appendChild(opt);
+                });
+                
+                // Восстанавливаем синхронизированный том и страницу
+                if (progData.volume && data.files.includes(progData.volume)) {
+                    select.value = progData.volume;
+                    currentPage = progData.page || 1;
+                } else {
+                    currentPage = 1;
+                }
+                
+                loadPdf(select.value, currentPage);
+            } else {
+                select.innerHTML = '<option>Нет файлов</option>';
+            }
+        }
+
+        // Загрузка самого PDF файла в браузер
+        async function loadPdf(filename, startPage = 1) {
+            viewer.innerHTML = '<h2 style="margin-top: 50px;">⏳ Загрузка PDF в браузер...</h2>';
+            
+            const url = `/api/manga/${filename}`;
+            try {
+                currentPdf = await pdfjsLib.getDocument(url).promise;
+                currentPage = startPage;
+                renderChunk();
+            } catch (err) {
+                viewer.innerHTML = `<h2 style="color:red;">Ошибка загрузки: ${err.message}</h2>`;
+            }
+        }
+
+        // Рендер 5 страниц
+        async function renderChunk() {
+            if (!currentPdf) return;
+            viewer.innerHTML = ''; // Очищаем экран
+            
+            let start = currentPage;
+            let end = Math.min(start + pagesPerChunk - 1, currentPdf.numPages);
+            
+            pageInfo.textContent = `Стр: ${start} - ${end} из ${currentPdf.numPages}`;
+            
+            // Отправляем прогресс на сервер при каждой отрисовке новой части
+            saveProgressToServer(select.value, currentPage);
+
+            for (let num = start; num <= end; num++) {
+                const page = await currentPdf.getPage(num);
+                const viewport = page.getViewport({ scale: currentScale });
+
+                const container = document.createElement('div');
+                container.className = 'page-container';
+
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                container.appendChild(canvas);
+                viewer.appendChild(container);
+
+                await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+            }
+            
+            // Скроллим наверх
+            window.scrollTo({ top: 0, behavior: 'auto' });
+        }
+
+        // --- ОБРАБОТЧИКИ СОБЫТИЙ ---
+        select.addEventListener('change', (e) => {
+            currentPage = 1;
+            loadPdf(e.target.value);
+        });
+
+        document.getElementById('next-btn').addEventListener('click', () => {
+            if (currentPdf && currentPage + pagesPerChunk <= currentPdf.numPages) {
+                currentPage += pagesPerChunk;
+                renderChunk();
+            }
+        });
+
+        document.getElementById('prev-btn').addEventListener('click', () => {
+            if (currentPdf && currentPage > 1) {
+                currentPage = Math.max(1, currentPage - pagesPerChunk);
+                renderChunk();
+            }
+        });
+
+        document.getElementById('zoom-in').addEventListener('click', () => {
+            currentScale += 0.2;
+            viewer.style.maxWidth = "100%"; // снимаем ограничение
+            renderChunk();
+        });
+
+        document.getElementById('zoom-out').addEventListener('click', () => {
+            if (currentScale > 0.6) {
+                currentScale -= 0.2;
+                renderChunk();
+            }
+        });
+
+        // Старт
+        loadMangaList();
+
+    </script>
+</body>
+</html>
