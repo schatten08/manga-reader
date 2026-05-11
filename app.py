@@ -82,6 +82,12 @@ else:
 
     st.sidebar.write(f"📖 Всего страниц в томе: {total_pages}")
 
+    st.sidebar.markdown("---")
+    st.sidebar.header("Настройки")
+    zoom_width = st.sidebar.slider("🔍 Масштаб (ширина)", min_value=300, max_value=2000, value=700, step=100, help="Увеличьте ползунок, чтобы растянуть мангу на весь экран ПК")
+    # Внедряем CSS-стиль для переопределения стандартной узкой ширины Streamlit
+    st.markdown(f"<style>.block-container {{ max-width: {zoom_width}px !important; padding-top: 2rem; }}</style>", unsafe_allow_html=True)
+
     # Считаем общее количество частей (округление вверх)
     total_chapters = (total_pages + PAGES_PER_CHAPTER - 1) // PAGES_PER_CHAPTER
 
