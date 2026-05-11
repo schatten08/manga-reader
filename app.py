@@ -48,6 +48,9 @@ else:
     total_chapters = (total_pages + PAGES_PER_CHAPTER - 1) // PAGES_PER_CHAPTER
 
     # Вспомогательные функции для переключения по кнопкам
+    def go_first():
+        st.session_state.current_chunk = 1
+
     def go_prev():
         if st.session_state.current_chunk > 1:
             st.session_state.current_chunk -= 1
@@ -56,16 +59,23 @@ else:
         if st.session_state.current_chunk < total_chapters:
             st.session_state.current_chunk += 1
 
+    def go_last():
+        st.session_state.current_chunk = total_chapters
+
     # --- ВЕРХНИЙ БЛОК НАВИГАЦИИ (До страниц) ---
     st.markdown("---")
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col1, col2, col3, col4, col5 = st.columns([1.5, 1.5, 3, 1.5, 1.5])
     with col1:
-        st.button("⬅️ Назад", on_click=go_prev, disabled=(st.session_state.current_chunk == 1), key="prev_top", use_container_width=True)
+        st.button("⏮️ В начало", on_click=go_first, disabled=(st.session_state.current_chunk == 1), key="first_top", use_container_width=True)
     with col2:
+        st.button("⬅️ Назад", on_click=go_prev, disabled=(st.session_state.current_chunk == 1), key="prev_top", use_container_width=True)
+    with col3:
         st.markdown(f"<h4 style='text-align: center; margin-top: 0;'>Часть {st.session_state.current_chunk} из {total_chapters}</h4>", unsafe_allow_html=True)
         st.markdown(f"<p style='text-align: center; margin-top: -10px; color: gray;'>Стр. {((st.session_state.current_chunk - 1) * PAGES_PER_CHAPTER) + 1} - {min(st.session_state.current_chunk * PAGES_PER_CHAPTER, total_pages)}</p>", unsafe_allow_html=True)
-    with col3:
+    with col4:
         st.button("Вперед ➡️", on_click=go_next, disabled=(st.session_state.current_chunk == total_chapters), key="next_top", use_container_width=True)
+    with col5:
+        st.button("В конец ⏭️", on_click=go_last, disabled=(st.session_state.current_chunk == total_chapters), key="last_top", use_container_width=True)
     st.markdown("---")
 
     # Вычисляем страницы для рендера
@@ -81,11 +91,15 @@ else:
         st.markdown("---")
 
     # --- НИЖНИЙ БЛОК НАВИГАЦИИ (После страниц) ---
-    col1_b, col2_b, col3_b = st.columns([1, 2, 1])
+    col1_b, col2_b, col3_b, col4_b, col5_b = st.columns([1.5, 1.5, 3, 1.5, 1.5])
     with col1_b:
-        st.button("⬅️ Назад", on_click=go_prev, disabled=(st.session_state.current_chunk == 1), key="prev_bottom", use_container_width=True)
+        st.button("⏮️ В начало", on_click=go_first, disabled=(st.session_state.current_chunk == 1), key="first_bottom", use_container_width=True)
     with col2_b:
-        st.markdown(f"<h4 style='text-align: center; margin-top: 0;'>Вверх или дальше?</h4>", unsafe_allow_html=True)
+        st.button("⬅️ Назад", on_click=go_prev, disabled=(st.session_state.current_chunk == 1), key="prev_bottom", use_container_width=True)
     with col3_b:
+        st.markdown(f"<h4 style='text-align: center; margin-top: 0;'>Вверх или дальше?</h4>", unsafe_allow_html=True)
+    with col4_b:
         st.button("Вперед ➡️", on_click=go_next, disabled=(st.session_state.current_chunk == total_chapters), key="next_bottom", use_container_width=True)
+    with col5_b:
+        st.button("В конец ⏭️", on_click=go_last, disabled=(st.session_state.current_chunk == total_chapters), key="last_bottom", use_container_width=True)
     st.markdown("---")
