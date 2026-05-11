@@ -9,19 +9,26 @@ def load_progress():
     if os.path.exists(PROGRESS_FILE):
         try:
             with open(PROGRESS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
+                data = json.load(f)
+                # Валидируем данные: если они сломаны, возвращаем пустоту
+                if not isinstance(data, dict):
+                    return {}
+                return data
+        except Exception: # Ловим любую ошибку чтения/парсинга JSON
             return {}
     return {}
 
 def save_progress():
-    with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
-        json.dump({
-            "volume": st.session_state.current_volume, 
-            "chunk": st.session_state.current_chunk,
-            "zoom": st.session_state.get("zoom_width", 700),
-            "saved_page": st.session_state.get("saved_page")
-        }, f)
+    try:
+        with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
+            json.dump({
+                "volume": st.session_state.current_volume, 
+                "chunk": st.session_state.current_chunk,
+                "zoom": st.session_state.get("zoom_width", 700),
+                "saved_page": st.session_state.get("saved_page")
+            }, f)
+    except Exception as e:
+        print(f"Ошибка сохранения прогресса: {e}")
 
 # --- Кэширование функции рендера для ускорения интерфейса ---
 @st.cache_data(show_spinner=False)
@@ -37,7 +44,7 @@ st.set_page_config(page_title="Manga Reader", layout="centered")
 st.title("🏴‍☠️ Manga Reader (One Piece)")
 
 MANGA_FOLDER = r"C:\Users\andrei_trokol\OneDrive - EPAM\OnePiece"
-PAGES_PER_CHAPTER = 20
+PAGES_PER_CHAPTER = 5 # Уменьшили до 5 для ускорения передачи по сети
 
 if not os.path.exists(MANGA_FOLDER):
     os.makedirs(MANGA_FOLDER)
@@ -139,13 +146,22 @@ else:
         update_and_save(total_chapters)
 
     # Прокрутка страницы наверх после смены части
+    import time
+    
+    # Скрытый якорь-пустышка в самом начале страницы
+    st.markdown(f'<div id="top_anchor"></div>', unsafe_allow_html=True)
+    
     if st.session_state.get("scroll_to_top", False):
-        js = '''
+        js = f'''
         <script>
-            var body = window.parent.document.querySelector(".main");
-            if (body) body.scrollTop = 0;
-            window.parent.scrollTo(0,0);
+            setTimeout(function() {{
+                var target = window.parent.document.getElementById("top_anchor");
+                if (target) {{
+                    target.scrollIntoView({{behavior: "instant", block: "start"}});
+                }}
+            }}, 300);
         </script>
+        <div id="top_scroll_marker_{time.time()}"></div>
         '''
         import streamlit.components.v1 as components
         components.html(js, height=0)
