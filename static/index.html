@@ -110,11 +110,11 @@
 
         // Загрузка списка манги с сервера (FastAPI)
         async function loadMangaList() {
-            const res = await fetch('/api/manga');
+            const res = await fetch('/api/manga', { cache: 'no-store' });
             const data = await res.json();
             
             // Получаем прогресс с сервера
-            const progRes = await fetch('/api/progress');
+            const progRes = await fetch('/api/progress', { cache: 'no-store' });
             const progData = await progRes.json();
             
             select.innerHTML = '';
