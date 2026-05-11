@@ -144,11 +144,16 @@ else:
     # --- ВЕРХНИЙ БЛОК НАВИГАЦИИ (До страниц) ---
     st.markdown("---")
     col1, col2, col3, col4, col5 = st.columns([1.5, 1.5, 3, 1.5, 1.5])
+    
+    # Красивое название тома без .pdf и подчеркиваний
+    display_volume = selected_pdf.replace(".pdf", "").replace("_", " ")
+
     with col1:
         st.button("⏮️ В начало", on_click=go_first, disabled=(st.session_state.current_chunk == 1), key="first_top", use_container_width=True)
     with col2:
         st.button("⬅️ Назад", on_click=go_prev, disabled=(st.session_state.current_chunk == 1), key="prev_top", use_container_width=True)
     with col3:
+        st.markdown(f"<div style='text-align: center; margin-top: -5px; font-weight: bold; color: #ff4b4b;'>📖 {display_volume}</div>", unsafe_allow_html=True)
         st.markdown(f"<h4 style='text-align: center; margin-top: 0;'>Часть {st.session_state.current_chunk} из {total_chapters}</h4>", unsafe_allow_html=True)
         st.markdown(f"<p style='text-align: center; margin-top: -10px; color: gray;'>Стр. {((st.session_state.current_chunk - 1) * PAGES_PER_CHAPTER) + 1} - {min(st.session_state.current_chunk * PAGES_PER_CHAPTER, total_pages)}</p>", unsafe_allow_html=True)
     with col4:
