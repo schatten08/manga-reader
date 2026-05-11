@@ -1,6 +1,22 @@
 import streamlit as st
 import fitz  # PyMuPDF
 import os
+import json
+
+PROGRESS_FILE = "read_progress.json"
+
+def load_progress():
+    if os.path.exists(PROGRESS_FILE):
+        try:
+            with open(PROGRESS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_progress(volume, chunk):
+    with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
+        json.dump({"volume": volume, "chunk": chunk}, f)
 
 # --- Кэширование функции рендера для ускорения интерфейса ---
 @st.cache_data(show_spinner=False)
@@ -27,16 +43,38 @@ if not pdf_files:
     st.warning(f"⚠️ Папка `{MANGA_FOLDER}` пуста.")
     st.info("💡 Инструкция:\n1. Закиньте любой PDF файл (том манги) в папку `manga_files`.\n2. Обновите страницу.")
 else:
+    # --- БОКОВОЕ МЕНЮ (НАВИГАЦИЯ) ---
     st.sidebar.header("Навигация")
 
-    # Выбор PDF-файла
-    selected_pdf = st.sidebar.selectbox("Выберите том:", pdf_files)
+    # Инициализация переменной для запоминания тома из файла
+    saved_data = load_progress()
+
+    if 'current_volume' not in st.session_state:
+        st.session_state.current_volume = saved_data.get("volume", pdf_files[0] if pdf_files else None)
+    if 'current_chunk' not in st.session_state:
+        st.session_state.current_chunk = saved_data.get("chunk", 1)
+
+    # Защита от случая, если сохраненный том был удален
+    if st.session_state.current_volume not in pdf_files and pdf_files:
+        st.session_state.current_volume = pdf_files[0]
+        st.session_state.current_chunk = 1
+
+    # Находим индекс последнего прочитанного тома (для selectbox)
+    try:
+        default_index = pdf_files.index(st.session_state.current_volume)
+    except ValueError:
+        default_index = 0
+
+    # Выбор PDF-файла (выбранный том обновляет сессию)
+    selected_pdf = st.sidebar.selectbox("Выберите том:", pdf_files, index=default_index)
     pdf_path = os.path.join(MANGA_FOLDER, selected_pdf)
 
-    # Если сменили том — сбрасываем прогресс чтения на 1-ю часть
-    if 'current_volume' not in st.session_state or st.session_state.current_volume != selected_pdf:
+    # Если пользователь вручную сменил том — сбрасываем прогресс чтения на 1-ю часть
+    if st.session_state.current_volume != selected_pdf:
         st.session_state.current_volume = selected_pdf
         st.session_state.current_chunk = 1
+        st.session_state.scroll_to_top = True
+        save_progress(st.session_state.current_volume, st.session_state.current_chunk)
 
     # Используем with для безопасного открытия файла, чтобы узнать количество страниц
     with fitz.open(pdf_path) as doc:
@@ -48,23 +86,24 @@ else:
     total_chapters = (total_pages + PAGES_PER_CHAPTER - 1) // PAGES_PER_CHAPTER
 
     # Вспомогательные функции для переключения по кнопкам
-    def go_first():
-        st.session_state.current_chunk = 1
+    def update_and_save(new_chunk):
+        st.session_state.current_chunk = new_chunk
         st.session_state.scroll_to_top = True
+        save_progress(st.session_state.current_volume, st.session_state.current_chunk)
+
+    def go_first():
+        update_and_save(1)
 
     def go_prev():
         if st.session_state.current_chunk > 1:
-            st.session_state.current_chunk -= 1
-            st.session_state.scroll_to_top = True
+            update_and_save(st.session_state.current_chunk - 1)
 
     def go_next():
         if st.session_state.current_chunk < total_chapters:
-            st.session_state.current_chunk += 1
-            st.session_state.scroll_to_top = True
+            update_and_save(st.session_state.current_chunk + 1)
 
     def go_last():
-        st.session_state.current_chunk = total_chapters
-        st.session_state.scroll_to_top = True
+        update_and_save(total_chapters)
 
     # Прокрутка страницы наверх после смены части
     if st.session_state.get("scroll_to_top", False):

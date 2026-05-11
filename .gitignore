@@ -6,3 +6,4 @@ venv/
 .venv/
 env/
 manga_files/
+read_progress.json
