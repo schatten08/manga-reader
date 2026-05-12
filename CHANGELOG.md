@@ -1,68 +1,27 @@
-# Changelog
+﻿# Changelog
 
-Все заметные изменения в этом проекте будут отражаться в данном файле.
+All notable changes to this project will be documented in this file.
 
-## [3.0.0] - 2026-05-12
-*(МИГРАЦИЯ В ОБЛАКО / SERVERLESS)*
+## [1.1.0] - 2026-05-12
 
-### Изменено (Changed)
-- **Хранилище данных:** Полный отказ от чтения файлов с локального диска компьютера. Приложение переведено на работу с S3-совместимым облачным объектным хранилищем **Backblaze B2**. 
-- **Загрузка PDF:** Фронтенд (через `PDF.js`) больше не скачивает файлы с бэкенда (`FastAPI`). Вместо этого бэкенд на лету генерирует временные signed URLs (`generate_presigned_url`), и браузер скачивает PDF напрямую из глобальной сети CDN, полностью снимая нагрузку с сервера.
-- **Хранение прогресса:** Файл синхронизации `read_progress.json` перенесен в облачный бакет. Это позволяет запускать бэкенд на любых эфемерных платформах (Render/Heroku/Vercel) без потери прогресса. 
+### Added
+- **Direct PDF Upload**: Added the ability to upload new manga volumes directly from the browser to Backblaze B2 using presigned PUT URLs, bypassing server payload limits.
+- **Precise Scroll Memory**: Integrated `localStorage` to save the user's exact scroll position (in pixels) with a 500ms debounce. Automatically restores the view to the exact frame after page reloads.
 
-### Добавлено (Added)
-- Интеграция SDK `boto3` для взаимодействия с Backblaze B2.
-- Поддержка конфигурации через переменные окружения (файл `.env` и библиотека `python-dotenv`).
-- Добавлен `Cache-Control: no-store` в Fetch-запросы браузера для предотвращения багов агрессивного кэширования мобильных браузеров.
-- Интеграция CORS `s3_get` для безопасных кросс-доменных запросов из интерфейса в B2.
-
----
-
-## [2.0.0] - 2026-05-11
-*(ГЛОБАЛЬНОЕ ОБНОВЛЕНИЕ АРХИТЕКТУРЫ)*
-
-### Изменено (Changed)
-- **Архитектура.** Полный отказ от библиотеки `Streamlit` и `PyMuPDF`. Приложение переписано в формат **Single Page Application (SPA)**.
-- **Бэкенд.** В качестве сервера теперь используется `FastAPI` (в связке с `uvicorn`).
-- **Фронтенд.** Вся отрисовка перенесена на сторону клиента (браузера) с использованием связки HTML/CSS/JS + `PDF.js` (от Mozilla). Это устранило все сетевые задержки при перелистывании страниц.
-- **Запуск.** Команда запуска изменена на `uvicorn main:app --host 0.0.0.0 --port 8000`.
-
-### Добавлено (Added)
-- `main.py` — новый компактный маршрутизатор API (FastAPI) с функциями раздачи файлов и работы с прогрессом.
-- `static/index.html` — новый клиентский интерфейс. Содержит встроенную "Темную тему", закрепленную (sticky) панель управления и Canvas-блоки для страниц.
-- **Настоящий динамический зум (`zoom-in` / `zoom-out`):** При изменении масштаба PDF перерисовывается в векторном качестве благодаря движку PDF.js.
-- **Natural Order Sorting (Естественная сортировка):** В бэкенд внедрен Regex-алгоритм для правильной алфавитно-цифровой сортировки томов (например, Том 100 теперь всегда будет идти после Тома 20).
-- Кросс-девайсная синхронизация прогресса: фоновые `fetch` запросы к API с сохранением состояния через `ProgressData(BaseModel)` и чтением/записью в `read_progress.json`.
-
-### Удалено (Removed)
-- Удален файл `app.py`.
-- Жесткая зависимость от перезагрузки страницы (Race conditions). Кнопки "Запомнить" больше не нужны: прогресс сохраняется в фоне автоматически.
-- Ограничение в "5 страниц" из-за нагрузки на сеть. Клиентский рендер позволил вернуть загрузку по `20` страниц за раз (`pagesPerChunk = 20`) без потерь производительности.
-
----
+### Changed
+- Improved Cloud UI integration: Added an upload button to the top navigation bar with visual feedback (upload progress states).
 
 ## [1.0.0] - 2026-05-11
 
-### Добавлено (Added)
-- Инициализация базового приложения на Streamlit для чтения PDF-манги с диска.
-- Интеграция библиотеки `PyMuPDF` (`fitz`) для конвертации PDF-страниц в `png` изображения высокого разрешения.
-- Система кэширования `@st.cache_data` для предотвращения повторного рендера страниц.
-- Поддержка чтения файлов из синхронизированных папок облачных хранилищ (OneDrive/Google Drive).
-- Удобная панель навигации интерфейса (кнопки "Начало", "Назад", "Вперед", "В конец") вместо ползунка.
-- Дублирование кнопок навигации сверху и снизу страницы.
-- Локальное сохранение прогресса в `read_progress.json` (запоминание тома и текущей части).
-- Система "Умных закладок": возможность поставить точную закладку (📍) на конкретную картинку страницы с авто-сохранением.
-- Настройка масштаба (Ширина контента) для пользователей с ультра-широкими экранами.
-- Переопределение CSS стилей для возможности расширения контента до 2000px.
-- Автоматический JavaScript-скролл страницы (scrollIntoView) к закладке при загрузке или к началу страницы при перелистывании "Вперед/Назад".
-- Визуальное отображение названия текущего тома в панели навигации (без подчеркиваний и .pdf).
-- `.gitignore` для защиты системных фалов и JSON-прогресса от выгрузки в публичный репозиторий.
+### Added
+- **Serverless Migration**: Migrated local storage to Backblaze B2 via `boto3`. Endpoints updated to deliver 2-hour presigned URLs for reading.
+- **Render Deployment**: Configured app for cloud hosting on Render.com with environment variables.
+- **PWA & Offline Support**: Added `manifest.json` and a Service Worker (`sw.js`) to allow "Add to Home Screen" installation and app shell caching.
+- **Smart PDF Caching (Cache API)**: Raw PDF blobs are now cached locally in the browser to bypass repeated network requests, securing offline access and saving cloud bandwidth constraints.
+- **High-DPI Support**: Added `devicePixelRatio` scaling to Canvas to fix blurry images on Retina mobile displays.
+- **Background Rendering**: Engineered background chunk rendering and 20-page prefetching for zero-latency reading.
+- **Swipe Gestures**: Built-in Hammer.js configuration for intuitive previous/next chunk swiping on mobile.
 
-### Изменено (Changed)
-- Размер одной порции страниц (`PAGES_PER_CHAPTER`) снижен с 20 до 5. Это радикально увеличило скорость загрузки картинок при передаче через серверы туннелирования (ngrok, Dev Tunnels) на мобильные телефоны.
-- Логика функции `st.rerun()` заменена на Streamlit Callbacks (`on_click`) при сохранении закладок для устранения зависаний сервера.
-- Модернизирован парсер прогресса: добавлен `try...except` блок для защиты приложения от падений в случае повреждения `read_progress.json` при параллельных запросах.
+### Removed
+- Deprecated Local Streamlit MVP codebase in favor of the new SPA + FastAPI architecture.
 
-### Исправлено (Fixed)
-- Исправлено поведение скролла в браузерах: заменен нестабильный метод перемещения фрейма `window.scrollTo` на надежный метод HTML-якорей (`<div id="top_anchor">`).
-- Исправлено дублирование JS скриптов на стороне Streamlit. Добавлена уникальная маска через `time.time()`, гарантирующая исполнение JS-скролла при каждом нажатии кнопок Вперед/Назад.

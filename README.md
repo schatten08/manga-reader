@@ -1,44 +1,47 @@
-# 🏴‍☠️ Manga Reader
+﻿# Manga Reader Web
 
-Сверхбыстрая SPA-читалка (Single Page Application) для манги в формате PDF. Построена на архитектуре **FastAPI + PDF.js**. Идеально подходит для комфортного чтения манги с ПК и мобильных устройств, обращаясь напрямую к файлам в облачных хранилищах (OneDrive, Google Drive), синхронизированных с компьютером.
+A modern, fast, and serverless-oriented Progressive Web App (PWA) for reading Manga in PDF format. Built with FastAPI, PDF.js, and Backblaze B2 cloud storage.
 
-## ✨ Основные возможности
+## Features
 
-* 🚀 **Zero-Lag Отрисовка**: PDF не нарезается на сервере. Бэкенд просто отдает файл один раз, а браузер телефона/ПК рендерит его мгновенно через PDF.js напрямую в HTML5 Canvas.
-* 📱 **Гигантские главы без тормозов**: Благодаря клиентскому рендеру, мы можем выводить по 20+ страниц за раз без задержек по сети и перегрузки туннеля.
-* 🔄 **Кроссплатформенная синхронизация прогресса**: Приложение в фоне общается с API FastAPI и запоминает прогресс в `read_progress.json`. Начали читать на ПК — продолжили с той же страницы на телефоне!
-* 🔍 **Нативный зум**: Настоящие инструменты приближения `+` и `-`, которые перерисовывают векторы и шрифты в PDF без потери качества ("без мыла").
-* 📚 **Интеллектуальная натуральная сортировка**: Сортировка томов происходит по логике человека (Том 2 идет перед Томом 100).
-* 🌙 **Темная тема по умолчанию**: Приятные для глаз цвета интерфейса, вшитые в CSS.
+- **Cloud Storage Integration**: Reads and streams manga seamlessly from Backblaze B2 (S3-compatible).
+- **Direct Cloud Upload**: Upload new manga PDFs directly from the browser to the B2 bucket using presigned URLs without proxying through the app server.
+- **Offline Mode & PWA**: Installs on mobile devices as a native-like app. Uses Service Workers and the Cache API to save downloaded manga locally, eliminating repeat data usage and ensuring offline availability.
+- **High Performance & Prefetching**: Renders PDFs in chunks via `pdf.js`. Automatically prefetches the next pages in the background for zero-lag reading.
+- **Mobile Optimized**:
+  - Hammer.js integration for left/right swipe navigation.
+  - High-DPI (Retina) Canvas rendering for crystal-clear text on modern smartphone screens.
+  - Granular zoom functionality.
+- **Smart Progress Tracking**: 
+  - Saves your current volume to the cloud.
+  - Remembers your exact pixel scroll position locally via `localStorage` so you return exactly where you left off.
 
-## 🛠 Установка и запуск
+## Tech Stack
 
-1. **Клонируйте репозиторий** и перейдите в папку проекта.
-2. **Установите зависимости**:
+- **Backend**: Python, FastAPI, `boto3` (AWS S3 SDK)
+- **Frontend**: HTML5, Vanilla JavaScript, CSS3
+- **Libraries**: PDF.js, Hammer.js
+- **Infrastructure**: Render.com (App Hosting), Backblaze B2 (Object Storage)
+
+## Local Setup
+
+1. Clone the repository.
+2. Create a virtual environment and install dependencies:
    ```bash
+   python -m venv .venv
+   .venv\Scripts\activate  # Windows
    pip install -r requirements.txt
    ```
-   *(Основные библиотеки: `fastapi`, `uvicorn`)*
-3. **Настройте путь к вашей манге**:
-   Откройте `main.py` и измените переменную `MANGA_FOLDER` на путь к вашей папке с PDF файлами (например, к папке OneDrive).
-   ```python
-   MANGA_FOLDER = r"C:\Users\...\OneDrive\Manga"
+3. Create a `.env` file in the root directory with your Backblaze B2 credentials:
+   ```env
+   B2_KEY_ID=your_key_id
+   B2_APPLICATION_KEY=your_app_key
+   B2_ENDPOINT=your_s3_endpoint
+   B2_BUCKET_NAME=your_bucket_name
    ```
-4. **Запустите быстрый сервер**:
+4. Run the development server:
    ```bash
-   uvicorn main:app --host 0.0.0.0 --port 8000
+   uvicorn main:app --host 0.0.0.0 --port 8000 --reload
    ```
+5. Open `http://localhost:8000` in your browser.
 
-## 🌍 Доступ с мобильного телефона
-
-### Способ 1: Локальный Wi-Fi (Рекомендуется, сверхбыстро)
-Убедитесь, что телефон в той же Wi-Fi сети. Вычислите IP-адрес вашего компьютера (например, `192.168.1.15`) и введите на телефоне: `http://192.168.1.15:8000`.
-
-### Способ 2: Через Интернет (По туннелю)
-В VS Code откройте вкладку **Ports** (Порты) в нижней панели, пробросьте порт `8000` и сделайте его **Public**. Переходите по сгенерированной ссылке с любого устройства через мобильный интернет LTE/5G.
-
-## ⚙️ Структура проекта
-* `main.py` — Бэкенд-сервер на FastAPI (API синхронизации и раздачи файлов).
-* `static/index.html` — Фронтенд (Интерфейс читалки, JavaScript, PDF.js).
-* `requirements.txt` — Список зависимостей Python.
-* `read_progress.json` — Файл, хранящий кросс-девайсный прогресс чтения.
