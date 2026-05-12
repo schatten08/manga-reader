@@ -176,7 +176,10 @@
 
             for (let num = start; num <= end; num++) {
                 const page = await currentPdf.getPage(num);
-                const viewport = page.getViewport({ scale: currentScale });
+                
+                // Улучшение резкости для современных экранов (High DPI / Mobile Retina)
+                const outputScale = window.devicePixelRatio || 1;
+                const viewport = page.getViewport({ scale: currentScale * outputScale });
 
                 const container = document.createElement('div');
                 container.className = 'page-container';
@@ -184,27 +187,18 @@
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 
-                // Улучшение резкости для современных экранов (High DPI / Mobile Retina)
-                const outputScale = window.devicePixelRatio || 1;
-                canvas.width = Math.floor(viewport.width * outputScale);
-                canvas.height = Math.floor(viewport.height * outputScale);
-                canvas.style.width = Math.floor(viewport.width) + "px";
-                canvas.style.height = Math.floor(viewport.height) + "px";
-
-                const transform = outputScale !== 1 
-                    ? [outputScale, 0, 0, outputScale, 0, 0] 
-                    : null;
-
-                const renderContext = {
-                    canvasContext: ctx,
-                    transform: transform,
-                    viewport: viewport
-                };
+                // Внутреннее высокое разрешение для четкости
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                
+                // Визуальная ширина ограничивается вычисленным масштабом.
+                // Высоту НЕ задаем (оставляем auto в CSS), чтобы на телефонах картинка не сжималась!
+                canvas.style.width = (viewport.width / outputScale) + "px";
 
                 container.appendChild(canvas);
                 viewer.appendChild(container);
 
-                await page.render(renderContext).promise;
+                await page.render({ canvasContext: ctx, viewport: viewport }).promise;
             }
             
             // Скроллим наверх
