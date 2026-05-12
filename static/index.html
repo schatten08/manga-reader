@@ -148,9 +148,14 @@
             }
         }
 
+        let prefetchedContainer = null;
+        let prefetchedPageStart = null;
+        let isRendering = false;
+
         // Загрузка самого PDF файла в браузер
         async function loadPdf(filename, startPage = 1) {
             viewer.innerHTML = '<h2 style="margin-top: 50px;">⏳ Загрузка PDF из облака...</h2>';
+            prefetchedContainer = null;
             
             try {
                 // Request the presigned URL first (отключаем жесткий кэш браузера)
@@ -169,72 +174,108 @@
             }
         }
 
-        // Рендер 5 страниц
+        // Вспомогательная функция отрисовки страниц в переданный контейнер
+        async function renderPagesToContainer(start, end, containerElement) {
+            for (let num = start; num <= end; num++) {
+                const page = await currentPdf.getPage(num);
+                const outputScale = window.devicePixelRatio || 1;
+                const viewport = page.getViewport({ scale: currentScale * outputScale });
+
+                const wrapper = document.createElement('div');
+                wrapper.className = 'page-container';
+
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                canvas.style.width = (viewport.width / outputScale) + "px";
+
+                wrapper.appendChild(canvas);
+                containerElement.appendChild(wrapper);
+
+                await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+            }
+        }
+
+        // Рендер страниц с поддержкой Prefetch
         async function renderChunk() {
-            if (!currentPdf) return;
-            viewer.innerHTML = ''; // Очищаем экран
+            if (!currentPdf || isRendering) return;
+            isRendering = true;
             
             let start = currentPage;
             let end = Math.min(start + pagesPerChunk - 1, currentPdf.numPages);
             
             pageInfo.textContent = `Стр: ${start} - ${end} из ${currentPdf.numPages}`;
-            
-            // Отправляем прогресс на сервер при каждой отрисовке новой части
             saveProgressToServer(select.value, currentPage);
 
-            for (let num = start; num <= end; num++) {
-                const page = await currentPdf.getPage(num);
-                
-                // Улучшение резкости для современных экранов (High DPI / Mobile Retina)
-                const outputScale = window.devicePixelRatio || 1;
-                const viewport = page.getViewport({ scale: currentScale * outputScale });
-
-                const container = document.createElement('div');
-                container.className = 'page-container';
-
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                
-                // Внутреннее высокое разрешение для четкости
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-                
-                // Визуальная ширина ограничивается вычисленным масштабом.
-                // Высоту НЕ задаем (оставляем auto в CSS), чтобы на телефонах картинка не сжималась!
-                canvas.style.width = (viewport.width / outputScale) + "px";
-
-                container.appendChild(canvas);
-                viewer.appendChild(container);
-
-                await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+            // Если страницы уже подготовлены в фоне - просто достаем их из кэша!
+            if (prefetchedContainer && prefetchedPageStart === start) {
+                viewer.innerHTML = '';
+                viewer.appendChild(prefetchedContainer);
+                console.log("⚡ Использован Prefetch кэш для страниц " + start);
+                prefetchedContainer = null;
+                prefetchedPageStart = null;
+            } else {
+                // Если скроллим назад или зумим, рендерим с нуля
+                viewer.innerHTML = '<h3 style="color:#aaa; text-align:center;">⏳ Загрузка...</h3>';
+                const tempDiv = document.createElement('div');
+                await renderPagesToContainer(start, end, tempDiv);
+                viewer.innerHTML = '';
+                viewer.appendChild(tempDiv);
             }
             
-            // Скроллим наверх
             window.scrollTo({ top: 0, behavior: 'auto' });
+            isRendering = false;
+            
+            // Сразу запускаем подготовку следующих страниц
+            prefetchNextChunk();
+        }
+
+        // Фоновая генерация следующих страниц (Prefetch)
+        async function prefetchNextChunk() {
+            if (!currentPdf) return;
+            let nextStart = currentPage + pagesPerChunk;
+            if (nextStart > currentPdf.numPages) return;
+
+            let nextEnd = Math.min(nextStart + pagesPerChunk - 1, currentPdf.numPages);
+            
+            prefetchedContainer = document.createElement('div');
+            prefetchedPageStart = nextStart;
+
+            try {
+                await renderPagesToContainer(nextStart, nextEnd, prefetchedContainer);
+                console.log("✅ Фоновый рендер страниц " + nextStart + "-" + nextEnd + " завершен!");
+            } catch (err) {
+                prefetchedContainer = null;
+            }
         }
 
         // --- ОБРАБОТЧИКИ СОБЫТИЙ ---
         select.addEventListener('change', (e) => {
             currentPage = 1;
+            prefetchedContainer = null;
             loadPdf(e.target.value);
         });
 
         document.getElementById('next-btn').addEventListener('click', () => {
-            if (currentPdf && currentPage + pagesPerChunk <= currentPdf.numPages) {
+            if (currentPdf && !isRendering && currentPage + pagesPerChunk <= currentPdf.numPages) {
                 currentPage += pagesPerChunk;
                 renderChunk();
             }
         });
 
         document.getElementById('prev-btn').addEventListener('click', () => {
-            if (currentPdf && currentPage > 1) {
+            if (currentPdf && !isRendering && currentPage > 1) {
                 currentPage = Math.max(1, currentPage - pagesPerChunk);
+                prefetchedContainer = null; // Сбрасываем prefetch при движении назад
                 renderChunk();
             }
         });
 
         document.getElementById('zoom-in').addEventListener('click', () => {
             currentScale += 0.2;
+            prefetchedContainer = null;
             viewer.style.maxWidth = "100%"; // снимаем ограничение
             renderChunk();
         });
@@ -242,6 +283,7 @@
         document.getElementById('zoom-out').addEventListener('click', () => {
             if (currentScale > 0.6) {
                 currentScale -= 0.2;
+                prefetchedContainer = null;
                 renderChunk();
             }
         });
