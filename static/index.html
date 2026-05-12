@@ -154,19 +154,41 @@
 
         // Загрузка самого PDF файла в браузер
         async function loadPdf(filename, startPage = 1) {
-            viewer.innerHTML = '<h2 style="margin-top: 50px;">⏳ Загрузка PDF из облака...</h2>';
+            viewer.innerHTML = '<h2 style="margin-top: 50px;">⏳ Проверка файлов...</h2>';
             prefetchedContainer = null;
             
             try {
-                // Request the presigned URL first (отключаем жесткий кэш браузера)
-                const res = await fetch(`/api/manga/${encodeURIComponent(filename)}`, { cache: 'no-store' });
-                const data = await res.json();
+                let pdfBuffer;
                 
-                if (data.error) {
-                    throw new Error(data.error);
+                // Проверяем кэш браузера напрямую через Cache API
+                const cache = await caches.open('manga-pdfs');
+                const cachedRes = await cache.match(filename);
+                
+                if (cachedRes) {
+                    console.log("⚡ PDF загружен из локального кэша устройства (трафик сэкономлен)!");
+                    viewer.innerHTML = '<h2 style="margin-top: 50px;">⚡ Распаковка из памяти...</h2>';
+                    const blob = await cachedRes.blob();
+                    pdfBuffer = new Uint8Array(await blob.arrayBuffer());
+                } else {
+                    console.log("☁️ Скачиваем PDF из облака...");
+                    viewer.innerHTML = '<h2 style="margin-top: 50px;">☁️ Загрузка из облака...</h2>';
+                    
+                    // 1. Получаем временную ссылку
+                    const res = await fetch(`/api/manga/${encodeURIComponent(filename)}`, { cache: 'no-store' });
+                    const data = await res.json();
+                    if (data.error) throw new Error(data.error);
+
+                    // 2. Скачиваем сам файл вручную
+                    const pdfRes = await fetch(data.url);
+                    const blob = await pdfRes.blob();
+                    
+                    // 3. Сохраняем в кэш под простым именем файла
+                    await cache.put(filename, new Response(blob));
+                    
+                    pdfBuffer = new Uint8Array(await blob.arrayBuffer());
                 }
 
-                currentPdf = await pdfjsLib.getDocument(data.url).promise;
+                currentPdf = await pdfjsLib.getDocument({ data: pdfBuffer }).promise;
                 currentPage = startPage;
                 renderChunk();
             } catch (err) {
