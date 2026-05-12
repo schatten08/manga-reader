@@ -142,11 +142,18 @@
 
         // Загрузка самого PDF файла в браузер
         async function loadPdf(filename, startPage = 1) {
-            viewer.innerHTML = '<h2 style="margin-top: 50px;">⏳ Загрузка PDF в браузер...</h2>';
+            viewer.innerHTML = '<h2 style="margin-top: 50px;">⏳ Загрузка PDF из облака...</h2>';
             
-            const url = `/api/manga/${filename}`;
             try {
-                currentPdf = await pdfjsLib.getDocument(url).promise;
+                // Request the presigned URL first (отключаем жесткий кэш браузера)
+                const res = await fetch(`/api/manga/${encodeURIComponent(filename)}`, { cache: 'no-store' });
+                const data = await res.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                currentPdf = await pdfjsLib.getDocument(data.url).promise;
                 currentPage = startPage;
                 renderChunk();
             } catch (err) {
