@@ -151,6 +151,7 @@
         let prefetchedContainer = null;
         let prefetchedPageStart = null;
         let isRendering = false;
+        let isInitialLoad = true;
 
         // Загрузка самого PDF файла в браузер
         async function loadPdf(filename, startPage = 1) {
@@ -253,6 +254,15 @@
             if (preserveScroll) {
                 // Применяем процент скролла к новой высоте документа (после рендера)
                 window.scrollTo({ top: document.documentElement.scrollHeight * scrollRatio, behavior: 'auto' });
+            } else if (isInitialLoad) {
+                // При первой загрузке страницы восстанавливаем точный скролл из LocalStorage
+                const savedScroll = localStorage.getItem('scroll_' + select.value + '_' + currentPage);
+                if (savedScroll) {
+                    window.scrollTo({ top: parseFloat(savedScroll), behavior: 'auto' });
+                } else {
+                    window.scrollTo({ top: 0, behavior: 'auto' });
+                }
+                isInitialLoad = false;
             } else {
                 window.scrollTo({ top: 0, behavior: 'auto' });
             }
@@ -286,6 +296,7 @@
         select.addEventListener('change', (e) => {
             currentPage = 1;
             prefetchedContainer = null;
+            isInitialLoad = true;
             loadPdf(e.target.value);
         });
 
@@ -335,6 +346,16 @@
         });
         hammer.on('swiperight', () => {
             document.getElementById('prev-btn').click();
+        });
+
+        // Отслеживание позиции скролла для сохранения (Debounce 500ms)
+        let scrollTimeout;
+        window.addEventListener('scroll', () => {
+            if (isRendering || !currentPdf) return;
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(() => {
+                localStorage.setItem('scroll_' + select.value + '_' + currentPage, window.scrollY);
+            }, 500);
         });
 
         // Старт
