@@ -298,6 +298,19 @@
                 window.scrollTo({ top: 0, behavior: 'auto' });
             }
             
+            // --- Умное скрытие верхней панели для мобильных ---
+            const topBar = document.getElementById('top-bar');
+            if (window.innerWidth <= 768) {
+                // Если дошли до последней страницы тома, показываем меню
+                if (end >= currentPdf.numPages) {
+                    topBar.style.display = 'flex';
+                } else {
+                    topBar.style.display = 'none'; // Прячем, чтобы было больше места для чтения
+                }
+            } else {
+                topBar.style.display = 'flex'; // На ПК всегда показываем
+            }
+
             isRendering = false;
             
             // Сразу запускаем подготовку следующих страниц
@@ -377,6 +390,18 @@
         });
         hammer.on('swiperight', () => {
             document.getElementById('prev-btn').click();
+        });
+
+        // Показ/скрытие панели по касанию устройства
+        viewer.addEventListener('click', () => {
+            if (window.innerWidth <= 768) {
+                const topBar = document.getElementById('top-bar');
+                if (topBar.style.display === 'none') {
+                    topBar.style.display = 'flex'; // Принудительно показываем
+                } else if (currentPdf && currentPage + pagesPerChunk - 1 < currentPdf.numPages) {
+                    topBar.style.display = 'none'; // Скрываем, если не конец тома
+                }
+            }
         });
 
         // Отслеживание позиции скролла для сохранения (Debounce 500ms)
