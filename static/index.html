@@ -221,9 +221,12 @@
         }
 
         // Рендер страниц с поддержкой Prefetch
-        async function renderChunk() {
+        async function renderChunk(preserveScroll = false) {
             if (!currentPdf || isRendering) return;
             isRendering = true;
+            
+            // Запоминаем текущую позицию скролла в процентах относительно высоты страницы
+            const scrollRatio = document.documentElement.scrollHeight > 0 ? (window.scrollY / document.documentElement.scrollHeight) : 0;
             
             let start = currentPage;
             let end = Math.min(start + pagesPerChunk - 1, currentPdf.numPages);
@@ -247,7 +250,13 @@
                 viewer.appendChild(tempDiv);
             }
             
-            window.scrollTo({ top: 0, behavior: 'auto' });
+            if (preserveScroll) {
+                // Применяем процент скролла к новой высоте документа (после рендера)
+                window.scrollTo({ top: document.documentElement.scrollHeight * scrollRatio, behavior: 'auto' });
+            } else {
+                window.scrollTo({ top: 0, behavior: 'auto' });
+            }
+            
             isRendering = false;
             
             // Сразу запускаем подготовку следующих страниц
@@ -299,14 +308,14 @@
             currentScale += 0.2;
             prefetchedContainer = null;
             viewer.style.maxWidth = "100%"; // снимаем ограничение
-            renderChunk();
+            renderChunk(true); // true = сохранять позицию скролла
         });
 
         document.getElementById('zoom-out').addEventListener('click', () => {
             if (currentScale > 0.6) {
                 currentScale -= 0.2;
                 prefetchedContainer = null;
-                renderChunk();
+                renderChunk(true); // true = сохранять позицию скролла
             }
         });
 
