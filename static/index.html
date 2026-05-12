@@ -52,7 +52,17 @@
             font-size: 16px;
             cursor: pointer;
         }
-        button:hover { background-color: #666; }
+        button:hover, .upload-label:hover { background-color: #666; }
+        .upload-label {
+            padding: 8px 12px;
+            border-radius: 5px;
+            background-color: var(--btn-bg);
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+        }
         
         #viewer {
             display: flex;
@@ -86,6 +96,10 @@
         <button id="next-btn">Вперед ➡️</button>
         <button id="zoom-in">🔍 +</button>
         <button id="zoom-out">🔍 -</button>
+        <label class="upload-label">
+            📤 <span id="upload-text">Загрузить</span>
+            <input type="file" id="upload-input" accept="application/pdf" style="display: none;">
+        </label>
     </div>
 
     <div id="viewer"></div>
@@ -356,6 +370,53 @@
             scrollTimeout = setTimeout(() => {
                 localStorage.setItem('scroll_' + select.value + '_' + currentPage, window.scrollY);
             }, 500);
+        });
+
+        // Загрузка новых томов с устройства пользователя в облако
+        const uploadInput = document.getElementById('upload-input');
+        const uploadText = document.getElementById('upload-text');
+
+        uploadInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                uploadText.innerText = "⏳ Подготовка...";
+                
+                // 1. Запрашиваем уникальную ссылку для загрузки на Backblaze B2
+                const res = await fetch('/api/upload-url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: file.name })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                uploadText.innerText = "📤 Отправка...";
+
+                // 2. Отправляем файл напрямую в облако (PUT запрос)
+                const uploadRes = await fetch(data.url, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/pdf' },
+                    body: file
+                });
+
+                if (!uploadRes.ok) throw new Error("Ошибка при отправке в Backblaze");
+
+                uploadText.innerText = "✅ Готово!";
+                setTimeout(() => { uploadText.innerText = "Загрузить"; }, 2000);
+                
+                // 3. Обновляем список манги
+                await loadMangaList();
+
+            } catch (err) {
+                console.error(err);
+                alert("Ошибка загрузки: " + err.message);
+                uploadText.innerText = "❌ Ошибка";
+                setTimeout(() => { uploadText.innerText = "Загрузить"; }, 3000);
+            } finally {
+                uploadInput.value = ""; // Очищаем input
+            }
         });
 
         // Старт

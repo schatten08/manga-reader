@@ -33,6 +33,26 @@ class ProgressData(BaseModel):
     volume: str
     page: int
 
+class UploadRequest(BaseModel):
+    filename: str
+
+@app.post("/api/upload-url")
+async def get_upload_url(data: UploadRequest):
+    try:
+        # Генерируем временную ссылку (на 1 час) для ЗАГРУЗКИ файла напрямую в B2
+        url = s3.generate_presigned_url(
+            ClientMethod='put_object',
+            Params={
+                'Bucket': B2_BUCKET_NAME,
+                'Key': data.filename,
+                'ContentType': 'application/pdf'
+            },
+            ExpiresIn=3600
+        )
+        return {"url": url}
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/api/progress")
 async def get_progress():
     try:
