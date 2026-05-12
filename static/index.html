@@ -195,7 +195,17 @@
 
                     // 2. Скачиваем сам файл вручную
                     const pdfRes = await fetch(data.url);
+                    
+                    if (!pdfRes.ok) {
+                        throw new Error(`Облако отклонило запрос (Код ${pdfRes.status}). Возможно, исчерпан дневной лимит трафика или файл недоступен.`);
+                    }
+                    
                     const blob = await pdfRes.blob();
+                    
+                    // Проверяем тип файла, чтобы не кэшировать ошибку в виде HTML/XML
+                    if (blob.type && !blob.type.includes('pdf') && !blob.type.includes('octet-stream')) {
+                        throw new Error('Упс, получен не PDF-файл. Сервер вернул текст или ошибку.');
+                    }
                     
                     // 3. Сохраняем в кэш под простым именем файла
                     await cache.put(filename, new Response(blob));
@@ -207,7 +217,14 @@
                 currentPage = startPage;
                 renderChunk();
             } catch (err) {
-                viewer.innerHTML = `<h2 style="color:red;">Ошибка загрузки: ${err.message}</h2>`;
+                let errorMsg = err.message;
+                if (errorMsg.includes('Invalid PDF structure')) {
+                    errorMsg = 'Файл поврежден. Попробуйте очистить кэш браузера или загрузить файл заново.';
+                }
+                viewer.innerHTML = `<div style="text-align:center; padding: 20px;">
+                    <h2 style="color:#ff4d4d; margin-top: 50px;">❌ Ошибка загрузки</h2>
+                    <p style="color:#ccc; font-size:16px;">${errorMsg}</p>
+                </div>`;
             }
         }
 
