@@ -2,10 +2,18 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Manga Reader Web</title>
-    <!-- Подключаем PDF.js -->
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#2d2d2d">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <!-- Подключаем PDF.js и Hammer.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root {
             --bg-color: #1e1e1e;
@@ -236,6 +244,24 @@
                 currentScale -= 0.2;
                 renderChunk();
             }
+        });
+
+        // Инициализация PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('PWA Service Worker зарегистрирован'))
+                    .catch(err => console.error('Ошибка Service Worker:', err));
+            });
+        }
+
+        // Инициализация свайпов (Hammer.js)
+        const hammer = new Hammer(viewer);
+        hammer.on('swipeleft', () => {
+            document.getElementById('next-btn').click();
+        });
+        hammer.on('swiperight', () => {
+            document.getElementById('prev-btn').click();
         });
 
         // Старт
