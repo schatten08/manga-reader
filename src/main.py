@@ -9,7 +9,11 @@ import boto3
 from botocore.config import Config
 from dotenv import load_dotenv
 
-load_dotenv()
+# Пути относительно текущего файла
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+
+load_dotenv(os.path.join(BASE_DIR, "..", ".env")) # Пытаемся грузить .env из корня тоже
 
 app = FastAPI(title="Manga Reader API")
 
@@ -73,15 +77,15 @@ async def save_progress(data: ProgressData):
         return {"error": str(e)}
 
 # Отдаем статические файлы (HTML, CSS, JS) из папки static
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.get("/")
 async def root():
-    return FileResponse("static/index.html")
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 @app.get("/sw.js")
 async def service_worker():
-    return FileResponse("static/sw.js", media_type="application/javascript")
+    return FileResponse(os.path.join(STATIC_DIR, "sw.js"), media_type="application/javascript")
 
 @app.get("/api/manga")
 async def get_manga_list():
