@@ -110,7 +110,8 @@
 
         let currentPdf = null;
         let currentPage = 1;
-        let pagesPerChunk = 20; // Увеличили количество страниц
+        // На мобильных устройствах рендерим меньше страниц (чтобы не забить оперативную память canvas'ами)
+        let pagesPerChunk = window.innerWidth <= 768 ? 8 : 20; 
         let currentScale = 1.5;
 
         const select = document.getElementById('manga-select');
@@ -232,7 +233,10 @@
         async function renderPagesToContainer(start, end, containerElement) {
             for (let num = start; num <= end; num++) {
                 const page = await currentPdf.getPage(num);
-                const outputScale = window.devicePixelRatio || 1;
+                
+                // Ограничиваем разрешение на мобильных (DPR), чтобы не словить жесткий OutOfMemory краш
+                const maxDPR = window.innerWidth <= 768 ? 1.5 : 2;
+                const outputScale = Math.min(window.devicePixelRatio || 1, maxDPR);
                 const viewport = page.getViewport({ scale: currentScale * outputScale });
 
                 const wrapper = document.createElement('div');
@@ -249,6 +253,9 @@
                 containerElement.appendChild(wrapper);
 
                 await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                
+                // Микро-пауза (50мс), чтобы интерфейс не зависал намертво во время тяжелого рендера
+                await new Promise(r => setTimeout(r, 50));
             }
         }
 
