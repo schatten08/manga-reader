@@ -100,6 +100,7 @@
             📤 <span id="upload-text">Загрузить</span>
             <input type="file" id="upload-input" accept="application/pdf" style="display: none;">
         </label>
+        <button id="crop-toggle">✂️ Обрезка: Вкл</button>
     </div>
 
     <div id="viewer"></div>
@@ -230,6 +231,97 @@
             }
         }
 
+        let isAutoCropEnabled = true;
+
+        // Алгоритм умной обрезки белых/черных краев (Mihon Smart Crop)
+        function applySmartCrop(canvas, ctx, outputScale) {
+            if (!isAutoCropEnabled) return;
+            const w = canvas.width;
+            const h = canvas.height;
+            if (w === 0 || h === 0) return;
+
+            const imgData = ctx.getImageData(0, 0, w, h);
+            const data = imgData.data;
+
+            // Берем цвет пикселя в левом верхнем углу как эталон фона
+            const bgR = data[0], bgG = data[1], bgB = data[2];
+            const threshold = 15; // Погрешность для артефактов JPEG/сканов
+
+            function isBg(x, y) {
+                const i = (y * w + x) * 4;
+                return Math.abs(data[i] - bgR) <= threshold &&
+                       Math.abs(data[i+1] - bgG) <= threshold &&
+                       Math.abs(data[i+2] - bgB) <= threshold;
+            }
+
+            let minX = w, minY = h, maxX = 0, maxY = 0;
+            const step = 4; // Шаг анализа пикселей (для высокой скорости)
+
+            // Поиск верхней границы
+            for (let y = 0; y < h; y += step) {
+                let empty = true;
+                for (let x = 0; x < w; x += step) {
+                    if (!isBg(x, y)) { empty = false; break; }
+                }
+                if (!empty) { minY = Math.max(0, y - step); break; }
+            }
+            if (minY === h) return; // Страница абсолютно пустая
+
+            // Поиск нижней границы
+            for (let y = h - 1; y >= 0; y -= step) {
+                let empty = true;
+                for (let x = 0; x < w; x += step) {
+                    if (!isBg(x, y)) { empty = false; break; }
+                }
+                if (!empty) { maxY = Math.min(h, y + step); break; }
+            }
+
+            // Поиск левой границы
+            for (let x = 0; x < w; x += step) {
+                let empty = true;
+                for (let y = minY; y <= maxY; y += step) {
+                    if (!isBg(x, y)) { empty = false; break; }
+                }
+                if (!empty) { minX = Math.max(0, x - step); break; }
+            }
+
+            // Поиск правой границы
+            for (let x = w - 1; x >= 0; x -= step) {
+                let empty = true;
+                for (let y = minY; y <= maxY; y += step) {
+                    if (!isBg(x, y)) { empty = false; break; }
+                }
+                if (!empty) { maxX = Math.min(w, x + step); break; }
+            }
+
+            // Добавляем микро-отступ, чтобы рамки фреймов манги не касались края экрана
+            const pad = 10 * outputScale;
+            minX = Math.max(0, minX - pad);
+            minY = Math.max(0, minY - pad);
+            maxX = Math.min(w, maxX + pad);
+            maxY = Math.min(h, maxY + pad);
+
+            const cropW = maxX - minX;
+            const cropH = maxY - minY;
+
+            // Если размер изменился очень слабо (на 20 пикселей) — нет смысла обрезать
+            if (cropW >= w - 20 && cropH >= h - 20) return;
+
+            // Вырезаем полезную часть во временный холст
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = cropW;
+            tempCanvas.height = cropH;
+            tempCanvas.getContext('2d').putImageData(ctx.getImageData(minX, minY, cropW, cropH), 0, 0);
+
+            // Уменьшаем основной хост до размера кадра и вставляем картинку обратно
+            canvas.width = cropW;
+            canvas.height = cropH;
+            ctx.drawImage(tempCanvas, 0, 0);
+            
+            // Физически увеличиваем CSS-размер холста — он "растянется" на весь телефон!
+            canvas.style.width = (cropW / outputScale) + "px";
+        }
+
         // Вспомогательная функция отрисовки страниц в переданный контейнер
         async function renderPagesToContainer(start, end, containerElement) {
             for (let num = start; num <= end; num++) {
@@ -254,6 +346,9 @@
                 containerElement.appendChild(wrapper);
 
                 await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                
+                // ВАЖНО: Применяем алгоритм авто-обрезки полей сразу после рендера!
+                applySmartCrop(canvas, ctx, outputScale);
                 
                 // ВАЖНО: Освобождаем внутренние кэши PDF.js для этой страницы сразу после отрисовки
                 page.cleanup();
@@ -395,6 +490,17 @@
                 prefetchedContainer = null;
                 renderChunk(true); // true = сохранять позицию скролла
             }
+        });
+
+        const cropTglBtn = document.getElementById('crop-toggle');
+        cropTglBtn.addEventListener('click', () => {
+            isAutoCropEnabled = !isAutoCropEnabled;
+            cropTglBtn.textContent = isAutoCropEnabled ? '✂️ Обрезка: Вкл' : '✂️ Обрезка: Выкл';
+            cropTglBtn.style.backgroundColor = isAutoCropEnabled ? 'var(--btn-bg)' : '#9e4646';
+            
+            // Заставляем систему перерисовать текущую страницу с новыми правилами
+            prefetchedContainer = null;
+            renderChunk(true); 
         });
 
         // Инициализация PWA
